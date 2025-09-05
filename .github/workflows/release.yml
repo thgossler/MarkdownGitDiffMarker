@@ -1,0 +1,143 @@
+name: Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.getver.outputs.version }}
+      tag: ${{ steps.getver.outputs.tag }}
+      title: ${{ steps.getver.outputs.title }}
+      body: ${{ steps.message.outputs.message }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get version from csproj
+        id: getver
+        run: |
+          VER=$(grep -oPm1 "(?<=<Version>)[^<]+" MarkdownGitDiffMarker.csproj)
+          if [ -z "$VER" ]; then echo "Version not found in csproj"; exit 1; fi
+          echo "version=$VER" >> $GITHUB_OUTPUT
+          echo "tag=v$VER" >> $GITHUB_OUTPUT
+          echo "title=v$VER" >> $GITHUB_OUTPUT
+
+      - name: Get commit message for release body
+        id: message
+        run: |
+          msg="${{ github.event.head_commit.message }}"
+          if [ -z "$msg" ]; then
+            msg=$(git log -1 --pretty=%B)
+          fi
+          echo "message<<EOF" >> $GITHUB_OUTPUT
+          echo "$msg" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+  build:
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+            label: Win-x64
+            ext: ".exe"
+          - os: windows-latest
+            rid: win-arm64
+            label: Win-arm64
+            ext: ".exe"
+          - os: ubuntu-latest
+            rid: linux-x64
+            label: Linux-x64
+            ext: ""
+          - os: ubuntu-latest
+            rid: linux-arm64
+            label: Linux-arm64
+            ext: ""
+          - os: macos-latest
+            rid: osx-x64
+            label: MacOS-x64
+            ext: ""
+          - os: macos-latest
+            rid: osx-arm64
+            label: MacOS-arm64
+            ext: ""
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Publish ${{ matrix.rid }}
+        run: |
+          dotnet publish -c Release -r ${{ matrix.rid }} \
+            -p:PublishSingleFile=true \
+            -p:SelfContained=true \
+            -p:PublishTrimmed=true \
+            -p:EnableCompressionInSingleFile=true
+
+      - name: Package artifact
+        id: package
+        shell: pwsh
+        run: |
+          $version='${{ needs.version.outputs.version }}'
+          $label='${{ matrix.label }}'
+          $name='MarkdownGitDiffMarker'
+          $rid='${{ matrix.rid }}'
+          $ext='${{ matrix.ext }}'
+          $binPath="bin/Release/net9.0/$rid/publish/$name$ext"
+          if (!(Test-Path $binPath)) { Get-ChildItem -Recurse bin/Release | Write-Host; throw "Binary not found at $binPath" }
+          $zipName="$name-v$version-$label$ext.zip"
+          if (Test-Path $zipName) { Remove-Item $zipName }
+          if ($IsWindows) {
+            Compress-Archive -Path $binPath -DestinationPath $zipName
+          } else {
+            & zip -j $zipName $binPath
+          }
+          echo "artifact_name=$zipName" >> $env:GITHUB_OUTPUT
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.artifact_name }}
+          path: ${{ steps.package.outputs.artifact_name }}
+
+  release:
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Flatten artifacts
+        run: |
+          shopt -s globstar nullglob
+          mkdir -p upload
+          mv dist/**/* upload/ || true
+          ls -la upload
+
+      - name: Create or update GitHub Release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ needs.version.outputs.tag }}
+          name: ${{ needs.version.outputs.title }}
+          body: ${{ needs.version.outputs.body }}
+          artifacts: upload/*
+          allowUpdates: true
+          replacesArtifacts: true
+          token: ${{ secrets.GITHUB_TOKEN }}
