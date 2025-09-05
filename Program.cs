@@ -46,7 +46,7 @@ namespace GitMarkdownDiffMarker
             var result = new List<string>();
 
             // Footer detection helpers
-            static bool IsFooter(string s) => s == "<br/><mark>(Change markers generated with [MarkdownGitDiffMarker](https://github.com/thgossler/MarkdownGitDiffMarker))</mark>";
+            static bool IsFooter(string s) => s == "<mark>(Change markers generated with [MarkdownGitDiffMarker](https://github.com/thgossler/MarkdownGitDiffMarker))</mark>";
 
             for (int idx = 0; idx < lines.Length; idx++)
             {
@@ -475,7 +475,7 @@ namespace GitMarkdownDiffMarker
                 var sb = new StringBuilder(result);
                 if (!result.EndsWith(lineEnding)) sb.Append(lineEnding);
                 sb.Append(lineEnding);
-                sb.Append("<br/><mark>_(Change markers generated with [MarkdownGitDiffMarker](https://github.com/thgossler/MarkdownGitDiffMarker))_</mark>").Append(lineEnding);
+                sb.Append("<mark>(Change markers generated with [MarkdownGitDiffMarker](https://github.com/thgossler/MarkdownGitDiffMarker))</mark>").Append(lineEnding);
                 
                 return sb.ToString();
             }
