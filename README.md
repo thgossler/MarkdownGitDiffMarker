@@ -1,4 +1,32 @@
-# MarkdownGitDiffMarker
+﻿﻿<div align="center">
+
+[![Contributors][contributors-shield]][contributors-url]
+[![Forks][forks-shield]][forks-url]
+[![Stargazers][stars-shield]][stars-url]
+[![Issues][issues-shield]][issues-url]
+[![AGPL License][license-shield]][license-url]
+
+</div>
+
+<!-- PROJECT LOGO -->
+<br />
+<div align="center">
+  <h1 align="center">MarkdownGitDiffMarker</h1>
+
+  <p align="center">
+    Highlight changes between two Git commits in a Markdown document.
+    <br />
+    <a href="https://github.com/thgossler/MarkdownGitDiffMarker/issues">Report Bug</a>
+    ·
+    <a href="https://github.com/thgossler/MarkdownGitDiffMarker/issues">Request Feature</a>
+    ·
+    <a href="https://github.com/thgossler/MarkdownGitDiffMarker#contributing">Contribute</a>
+    ·
+    <a href="https://github.com/sponsors/thgossler">Sponsor project</a>
+  </p>
+</div>
+
+## About The Project
 
 Highlight Markdown changes between two Git commits (or between your workspace and a commit) by inserting visible change markers directly into the .md files. The tool writes changes in-place and can also remove previously added markers to restore clean Markdown.
 
@@ -91,16 +119,12 @@ Options (from source):
   - Source commit (e.g., `HEAD`, `HEAD~1`, short/full hash). Optional.
 - `-t, --target-git-hash <hash-or-commitish>`
   - Target commit. Only valid when `--source-git-hash` is also provided.
-- `-r, --remove-markers`
-  - Remove all previously added markers from matched Markdown files.
 
 Valid usage patterns:
 
 - File pattern only: compare workspace with `HEAD`.
 - `-s` + file pattern: compare workspace with the specified source commit.
 - `-s` + `-t` + file pattern: compare two commits (workspace ignored). The annotated result for the target commit is written to the working file.
-
-If `-r` is provided, it takes precedence and performs cleanup.
 
 ## Pattern/Path behavior
 
@@ -118,8 +142,6 @@ Examples of emitted markers:
 - Inline additions: `<mark>text</mark>`
 - Inline deletions: `<mark>~~text~~</mark>`
 
-Cleanup (`--remove-markers`) removes banners and inline wrappers, and strips helper prefixes like `OLD:<br/>`/`NEW:<br/>` and trailing `<br/>` introduced by figure diffs.
-
 ## Examples
 
 - Compare workspace with HEAD for a single file:
@@ -128,8 +150,6 @@ Cleanup (`--remove-markers`) removes banners and inline wrappers, and strips hel
   - `dotnet run -- -s HEAD~1 -f "docs/**/*.md"`
 - Compare two specific commits for a file:
   - `dotnet run -- -s a1b2c3d -t d4e5f6a -f "docs/guide.md"`
-- Remove markers across docs:
-  - `dotnet run -- -r -f "docs/**/*.md"`
 
 ## Troubleshooting
 
@@ -138,11 +158,34 @@ Cleanup (`--remove-markers`) removes banners and inline wrappers, and strips hel
 - "Invalid or non-existent Git hash": Use valid commit-ish (e.g., `HEAD`, `HEAD~2`, full/short SHA).
 - Nothing happens: Ensure Git is installed and available on PATH. The tool uses `git diff --no-index` under the hood.
 
-## Project
 
-- Project: `MarkdownGitDiffMarker.csproj`
-- Target framework: .NET 9 (`net9.0`)
+## Contributing
+
+Contributions are what make the open source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
+
+If you have a suggestion that would make this better, please fork the repo and create a pull request. You can also simply open an issue with the tag "enhancement".
+Don't forget to give the project a star :wink: Thanks!
+
+1. Fork the Project
+2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the Branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
 
 ## License
 
-MIT � see LICENSE.txt
+Distributed under the MIT License. See [`LICENSE`](LICENSE.txt) for more information.
+
+
+<!-- MARKDOWN LINKS & IMAGES (https://www.markdownguide.org/basic-syntax/#reference-style-links) -->
+[contributors-shield]: https://img.shields.io/github/contributors/thgossler/MarkdownGitDiffMarker.svg
+[contributors-url]: https://github.com/thgossler/MarkdownGitDiffMarker/graphs/contributors
+[forks-shield]: https://img.shields.io/github/forks/thgossler/MarkdownGitDiffMarker.svg
+[forks-url]: https://github.com/thgossler/MarkdownGitDiffMarker/network/members
+[stars-shield]: https://img.shields.io/github/stars/thgossler/MarkdownGitDiffMarker.svg
+[stars-url]: https://github.com/thgossler/MarkdownGitDiffMarker/stargazers
+[issues-shield]: https://img.shields.io/github/issues/thgossler/MarkdownGitDiffMarker.svg
+[issues-url]: https://github.com/thgossler/MarkdownGitDiffMarker/issues
+[license-shield]: https://img.shields.io/github/license/thgossler/MarkdownGitDiffMarker.svg
+[license-url]: https://github.com/thgossler/MarkdownGitDiffMarker/blob/main/LICENSE.txt
