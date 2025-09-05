@@ -2,6 +2,11 @@ name: Release
 
 on:
   workflow_dispatch:
+    inputs:
+      description:
+        description: 'Release description to append to the title (e.g. "Bug fixes")'
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -20,12 +25,14 @@ jobs:
 
       - name: Get version from csproj
         id: getver
+        env:
+          DESC: ${{ inputs.description }}
         run: |
           VER=$(grep -oPm1 "(?<=<Version>)[^<]+" MarkdownGitDiffMarker.csproj)
           if [ -z "$VER" ]; then echo "Version not found in csproj"; exit 1; fi
           echo "version=$VER" >> $GITHUB_OUTPUT
           echo "tag=v$VER" >> $GITHUB_OUTPUT
-          echo "title=v$VER" >> $GITHUB_OUTPUT
+          echo "title=v$VER - $DESC" >> $GITHUB_OUTPUT
 
       - name: Get commit message for release body
         id: message
@@ -79,15 +86,10 @@ jobs:
           dotnet-version: '9.0.x'
 
       - name: Restore
-        run: dotnet restore
+        run: dotnet restore MarkdownGitDiffMarker.csproj
 
       - name: Publish ${{ matrix.rid }}
-        run: |
-          dotnet publish -c Release -r ${{ matrix.rid }} \
-            -p:PublishSingleFile=true \
-            -p:SelfContained=true \
-            -p:PublishTrimmed=true \
-            -p:EnableCompressionInSingleFile=true
+        run: dotnet publish MarkdownGitDiffMarker.csproj -c Release -r ${{ matrix.rid }} -p:PublishSingleFile=true -p:SelfContained=true -p:PublishTrimmed=true -p:EnableCompressionInSingleFile=true
 
       - name: Package artifact
         id: package
