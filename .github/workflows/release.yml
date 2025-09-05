@@ -18,10 +18,13 @@ jobs:
       version: ${{ steps.getver.outputs.version }}
       tag: ${{ steps.getver.outputs.tag }}
       title: ${{ steps.getver.outputs.title }}
-      body: ${{ steps.message.outputs.message }}
+      body: ${{ steps.changelog.outputs.body }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Get version from csproj
         id: getver
@@ -34,15 +37,27 @@ jobs:
           echo "tag=v$VER" >> $GITHUB_OUTPUT
           echo "title=v$VER - $DESC" >> $GITHUB_OUTPUT
 
-      - name: Get commit message for release body
-        id: message
+      - name: Generate changelog since last tag
+        id: changelog
         run: |
-          msg="${{ github.event.head_commit.message }}"
-          if [ -z "$msg" ]; then
-            msg=$(git log -1 --pretty=%B)
+          git fetch --tags --force || true
+          PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ -n "$PREV_TAG" ]; then
+            RANGE="$PREV_TAG..HEAD"
+          else
+            RANGE=""
           fi
-          echo "message<<EOF" >> $GITHUB_OUTPUT
-          echo "$msg" >> $GITHUB_OUTPUT
+          echo "Previous tag: $PREV_TAG"
+          if [ -n "$RANGE" ]; then
+            BODY=$(git log --pretty=format:'- %s (%h)' $RANGE)
+          else
+            BODY=$(git log --pretty=format:'- %s (%h)')
+          fi
+          if [ -z "$BODY" ]; then
+            BODY="No changes"
+          fi
+          echo "body<<EOF" >> $GITHUB_OUTPUT
+          echo "$BODY" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
   build:
