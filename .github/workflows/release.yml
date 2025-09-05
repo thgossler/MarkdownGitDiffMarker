@@ -26,16 +26,17 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      - name: Get version from csproj
+      - name: Get version from csproj (trim to 3 parts)
         id: getver
         env:
           DESC: ${{ inputs.description }}
         run: |
           VER=$(grep -oPm1 "(?<=<Version>)[^<]+" MarkdownGitDiffMarker.csproj)
           if [ -z "$VER" ]; then echo "Version not found in csproj"; exit 1; fi
-          echo "version=$VER" >> $GITHUB_OUTPUT
-          echo "tag=v$VER" >> $GITHUB_OUTPUT
-          echo "title=v$VER - $DESC" >> $GITHUB_OUTPUT
+          RELVER=$(echo "$VER" | cut -d. -f1-3)
+          echo "version=$RELVER" >> $GITHUB_OUTPUT
+          echo "tag=v$RELVER" >> $GITHUB_OUTPUT
+          echo "title=v$RELVER - $DESC" >> $GITHUB_OUTPUT
 
       - name: Generate changelog since last tag
         id: changelog
@@ -136,17 +137,15 @@ jobs:
     needs: [version, build]
     runs-on: ubuntu-latest
     steps:
-      - name: Download artifacts
+      - name: Download artifacts (flatten)
         uses: actions/download-artifact@v4
         with:
           path: dist
+          merge-multiple: true
 
-      - name: Flatten artifacts
+      - name: List files to upload
         run: |
-          shopt -s globstar nullglob
-          mkdir -p upload
-          mv dist/**/* upload/ || true
-          ls -la upload
+          ls -la dist
 
       - name: Create or update GitHub Release
         uses: ncipollo/release-action@v1
@@ -154,7 +153,7 @@ jobs:
           tag: ${{ needs.version.outputs.tag }}
           name: ${{ needs.version.outputs.title }}
           body: ${{ needs.version.outputs.body }}
-          artifacts: upload/*
+          artifacts: dist/*
           allowUpdates: true
           replacesArtifacts: true
           token: ${{ secrets.GITHUB_TOKEN }}
