@@ -24,95 +24,19 @@ namespace GitMarkdownDiffMarker
                 IsRequired = true
             };
 
-            var removeMarkersOption = new Option<bool>(
-                aliases: ["-r", "--remove-markers"],
-                description: "Remove all previously added change markers from markdown files");
-
             var rootCommand = new RootCommand("Highlight Markdown changes between two Git commits or workspace")
             {
                 sourceGitHashOption,
                 targetGitHashOption,
-                fileOption,
-                removeMarkersOption
+                fileOption
             };
 
-            rootCommand.SetHandler(async (string? sourceGitHash, string? targetGitHash, string filePattern, bool removeMarkers) =>
+            rootCommand.SetHandler(async (string? sourceGitHash, string? targetGitHash, string filePattern) =>
             {
-                if (removeMarkers)
-                {
-                    await RemoveMarkersFromMarkdownFiles(filePattern);
-                }
-                else
-                {
-                    await ProcessMarkdownDiff(sourceGitHash, targetGitHash, filePattern);
-                }
-            }, sourceGitHashOption, targetGitHashOption, fileOption, removeMarkersOption);
+                await ProcessMarkdownDiff(sourceGitHash, targetGitHash, filePattern);
+            }, sourceGitHashOption, targetGitHashOption, fileOption);
 
             return await rootCommand.InvokeAsync(args);
-        }
-
-        static async Task RemoveMarkersFromMarkdownFiles(string filePattern)
-        {
-            try
-            {
-                // First resolve the glob pattern to get file paths
-                var matchingFiles = ResolveGlobPattern(filePattern);
-                
-                if (matchingFiles.Count == 0)
-                {
-                    Console.Error.WriteLine($"No files found matching pattern: {filePattern}");
-                    return;
-                }
-
-                // Now find Git repository, trying from file locations if needed
-                var repoPath = FindGitRepository(matchingFiles);
-                if (repoPath == null)
-                {
-                    Console.Error.WriteLine("No Git repository found in current directory, parent directories, or near the specified files.");
-                    return;
-                }
-
-                foreach (var file in matchingFiles)
-                {
-                    if (!file.EndsWith(".md", StringComparison.OrdinalIgnoreCase))
-                    {
-                        Console.WriteLine($"Skipping non-markdown file: {Path.GetFileName(file)}");
-                        continue;
-                    }
-
-                    await RemoveMarkersFromFile(file);
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.Error.WriteLine($"Error removing markers: {ex.Message}");
-            }
-        }
-
-        static async Task RemoveMarkersFromFile(string filePath)
-        {
-            try
-            {
-                var content = await File.ReadAllTextAsync(filePath);
-                var originalContent = content;
-
-                // Remove change markers
-                content = RemoveChangeMarkers(content);
-
-                if (content != originalContent)
-                {
-                    await File.WriteAllTextAsync(filePath, content);
-                    Console.WriteLine($"Removed markers from {Path.GetFileName(filePath)}");
-                }
-                else
-                {
-                    Console.WriteLine($"No markers found in {Path.GetFileName(filePath)}");
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.Error.WriteLine($"Error processing {filePath}: {ex.Message}");
-            }
         }
 
         static string RemoveChangeMarkers(string content)
@@ -121,19 +45,36 @@ namespace GitMarkdownDiffMarker
             var lines = content.Replace("\r\n", "\n").Split('\n');
             var result = new List<string>();
 
-            foreach (var line in lines)
+            // Footer detection helpers
+            static bool IsFooter(string s) => s == "<br/><mark>(Change markers generated with [MarkdownGitDiffMarker](https://github.com/thgossler/MarkdownGitDiffMarker))</mark>";
+
+            for (int idx = 0; idx < lines.Length; idx++)
             {
-                var processedLine = line;
+                var line = lines[idx];
                 var trimmed = line.Trim();
+
+                // Remove the footer block if present
+                if (IsFooter(trimmed))
+                {
+                    // Skip optional trailing blank line
+                    if (idx + 1 < lines.Length && string.IsNullOrWhiteSpace(lines[idx + 1])) idx++;
+                    continue;
+                }
 
                 if (trimmed.StartsWith("<mark>**[CHANGE]**</mark>") ||
                     trimmed.StartsWith("<mark>**[CHANGE] in table**</mark>") ||
                     trimmed.StartsWith("<mark>**[CHANGE] in figure**</mark>"))
                 {
+                    // Also skip a single empty line that may follow a banner we inserted
+                    if (idx + 1 < lines.Length && string.IsNullOrWhiteSpace(lines[idx + 1]))
+                    {
+                        idx++; // skip following blank line
+                    }
                     continue;
                 }
 
                 // Remove inline markers
+                var processedLine = line;
                 processedLine = Regex.Replace(processedLine, @"<mark>(.*?)</mark>", "$1");
                 processedLine = Regex.Replace(processedLine, @"<ins>(.*?)</ins>", "$1");
                 // Remove strike-through wrapper anywhere
@@ -528,8 +469,15 @@ namespace GitMarkdownDiffMarker
                 
                 // Parse diff and apply markdown markers intelligently
                 var result = ApplyIntelligentDiffMarkers(cleanNewContent, gitDiff, changesSummary);
+
+                // Append footer block
+                var lineEnding = DetectLineEnding(newContent);
+                var sb = new StringBuilder(result);
+                if (!result.EndsWith(lineEnding)) sb.Append(lineEnding);
+                sb.Append(lineEnding);
+                sb.Append("<br/><mark>_(Change markers generated with [MarkdownGitDiffMarker](https://github.com/thgossler/MarkdownGitDiffMarker))_</mark>").Append(lineEnding);
                 
-                return result;
+                return sb.ToString();
             }
             finally
             {
@@ -547,7 +495,7 @@ namespace GitMarkdownDiffMarker
             var result = new StringBuilder();
 
             // -------- Local helpers --------
-            bool IsSeparatorRow(string s) => Regex.IsMatch(s.Trim(), @"^\|?\s*(:?-+\s*:?\s*\|)+\s*:?-+\s*:?\s*$");
+            bool IsSeparatorRow(string s) => Regex.IsMatch(s.Trim(), @"^\|?\s*(:?-+\s*:?-?\s*\|)+\s*:?-+\s*:?-?\s*$");
             bool IsHeading(string line, out string hashes, out string space, out string rest)
             {
                 var m = Regex.Match(line, @"^\s{0,3}(#{1,6})(\s*)(.*)$");
@@ -594,8 +542,17 @@ namespace GitMarkdownDiffMarker
                 var cells = line.Split('|');
                 for (int i = 0; i < cells.Length; i++)
                 {
-                    var cell = cells[i]; if (string.IsNullOrWhiteSpace(cell)) continue; var trimmed = cell.Trim();
-                    if (Regex.IsMatch(trimmed, @"^:?-+:?$")) continue; cells[i] = $"<mark>{cell}</mark>";
+                    var cell = cells[i];
+                    if (string.IsNullOrEmpty(cell)) continue;
+                    var trimmed = cell.Trim();
+                    if (trimmed.Length == 0) continue;
+                    if (Regex.IsMatch(trimmed, @"^:?-+:?$")) continue;
+                    int leftSpaces = 0, rightSpaces = 0;
+                    while (leftSpaces < cell.Length && cell[leftSpaces] == ' ') leftSpaces++;
+                    while (rightSpaces < cell.Length - leftSpaces && cell[cell.Length - 1 - rightSpaces] == ' ') rightSpaces++;
+                    var left = new string(' ', leftSpaces);
+                    var right = new string(' ', rightSpaces);
+                    cells[i] = $"{left}<mark>{trimmed}</mark>{right}";
                 }
                 return string.Join("|", cells);
             }
@@ -686,7 +643,7 @@ namespace GitMarkdownDiffMarker
                 var region = tableRegions.FirstOrDefault(r => r.start == i);
                 bool tableHasDeletionsHere = region.start != 0 && tableDeletionsByNewLine.Keys.Any(k => k >= region.start && k <= region.end);
                 if (region.start == i && (changedTableStarts.Contains(region.start) || tableHasDeletionsHere) && !tableBannerEmitted.Contains(region.start))
-                { result.Append($"<mark>**[CHANGE] in table**</mark>{lineEnding}"); tableBannerEmitted.Add(region.start); }
+                { result.Append($"<mark>**[CHANGE] in table**</mark>{lineEnding}{lineEnding}"); tableBannerEmitted.Add(region.start); }
 
                 if (inTable)
                 {
@@ -931,12 +888,6 @@ namespace GitMarkdownDiffMarker
 
         static string? FindGitRepository(List<string>? filePaths = null)
         {
-            var dir = Directory.GetCurrentDirectory();
-            while (dir != null)
-            {
-                if (Directory.Exists(Path.Combine(dir, ".git"))) return dir;
-                dir = Directory.GetParent(dir)?.FullName;
-            }
             if (filePaths != null)
             {
                 foreach (var f in filePaths)
@@ -952,6 +903,12 @@ namespace GitMarkdownDiffMarker
                     }
                     catch { }
                 }
+            }
+            var dir = Directory.GetCurrentDirectory();
+            while (dir != null)
+            {
+                if (Directory.Exists(Path.Combine(dir, ".git"))) return dir;
+                dir = Directory.GetParent(dir)?.FullName;
             }
             return null;
         }

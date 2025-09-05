@@ -62,6 +62,27 @@ Synopsis:
 - Remove previously added markers:
   - `dotnet run -- -r -f "docs/**/*.md"`
 
+### PowerShell helper scripts
+
+- Run.ps1
+  - Use this script to start the program without rebuilding. It forwards all arguments, so you can pass them naturally.
+  - Examples:
+    - `./Run.ps1 --help`
+    - `./Run.ps1 -f "docs/**/*.md"`
+- RevertLastCommit.ps1
+  - Use this script to undo the last Git commit by creating a new revert commit and pushing it to `origin` (you will be prompted to confirm).
+  - Internally runs: `git revert HEAD --no-edit` followed by `git push origin HEAD`.
+
+### Intended workflow
+
+1. Commit all changes to the Markdown document.
+2. Run the tool to add change markers to the Markdown document (e.g., `./Run.ps1 -f README.md`).
+3. Commit the Markdown document with change markers (for review).
+4. Collect review comments.
+5. Revert the last commit to remove the change markers again (e.g., `./RevertLastCommit.ps1`).
+6. Incorporate the review feedback into the Markdown document.
+7. Commit the final Markdown document (release).
+
 Options (from source):
 
 - `-f, --file <pattern>`
